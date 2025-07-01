@@ -1,11 +1,16 @@
 package main
 
 import (
+	"encoding/json"
 	"encoding/xml"
 	"flag"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
+	"strings"
+	"time"
 
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/device"
@@ -60,61 +65,157 @@ type GetDeviceInformationResponse struct {
 	HardwareId      string `xml:"HardwareId"`
 }
 
-func main() {
-	addr := flag.String("a", "", "Camera ONVIF API address/port (example: 192.168.1.100:8080)")
-	user := flag.String("u", "admin", "Camera username")
-	pass := flag.String("p", "admin", "Camera password")
-	flag.Parse()
+type ProbeMatch struct {
+	XAddrs string `xml:"XAddrs"`
+	Types  string `xml:"Types"`
+}
 
-	if *addr == "" || *user == "" || *pass == "" {
-		flag.Usage()
-		os.Exit(1)
+type ProbeMatches struct {
+	ProbeMatch []ProbeMatch `xml:"ProbeMatch"`
+}
+
+type DiscoveryResponse struct {
+	ProbeMatches ProbeMatches `xml:"Body>ProbeMatches"`
+}
+
+type DiscoveredDevice struct {
+	Address         string              `json:"address,omitempty"`
+	Manufacturer    string              `json:"manufacturer,omitempty"`
+	Model           string              `json:"model,omitempty"`
+	FirmwareVersion string              `json:"firmware_version,omitempty"`
+	SerialNumber    string              `json:"serial_number,omitempty"`
+	HardwareId      string              `json:"hardware_id,omitempty"`
+	Profiles        []DiscoveredProfile `json:"profile,omitemptys"`
+}
+
+type DiscoveredProfile struct {
+	Name       string `json:"name,omitempty"`
+	Token      string `json:"token,omitempty"`
+	Resolution string `json:"resolution,omitempty"`
+	FrameRate  int    `json:"frame_rate,omitempty"`
+	StreamURI  string `json:"stream_uri,omitempty"`
+}
+
+func discoverONVIFDevices(timeout time.Duration) ([]string, error) {
+	probe := `<?xml version="1.0" encoding="UTF-8"?>
+<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"
+ xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing"
+ xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+ <e:Header>
+  <w:MessageID>uuid:` + generateUUID() + `</w:MessageID>
+  <w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
+  <w:Action>http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>
+ </e:Header>
+ <e:Body>
+  <d:Probe>
+   <d:Types>dn:NetworkVideoTransmitter</d:Types>
+  </d:Probe>
+ </e:Body>
+</e:Envelope>`
+
+	addr := net.UDPAddr{
+		IP:   net.ParseIP("239.255.255.250"),
+		Port: 3702,
+	}
+	conn, err := net.ListenUDP("udp4", &net.UDPAddr{IP: net.IPv4zero, Port: 0})
+	if err != nil {
+		return nil, err
+	}
+	defer conn.Close()
+	conn.SetDeadline(time.Now().Add(timeout))
+
+	_, err = conn.WriteToUDP([]byte(probe), &addr)
+	if err != nil {
+		return nil, err
 	}
 
-	dev, err := goonvif.NewDevice(goonvif.DeviceParams{
-		Xaddr:    *addr,
-		Username: *user,
-		Password: *pass,
-	})
-	if err != nil {
-		panic(err)
-	}
-
-	// Get device info
-	deviceInfoResp, err := dev.CallMethod(device.GetDeviceInformation{})
-	if err != nil {
-		log.Printf("Failed to get device information: %v", err)
-	} else {
-		defer deviceInfoResp.Body.Close()
-		var envInfo Envelope
-		if err := xml.NewDecoder(deviceInfoResp.Body).Decode(&envInfo); err == nil && envInfo.Body.GetDeviceInformationResponse != nil {
-			info := envInfo.Body.GetDeviceInformationResponse
-			fmt.Printf("Device Information:\nManufacturer: %s\nModel: %s\nFirmware: %s\nSerial: %s\nHardwareID: %s\n\n",
-				info.Manufacturer, info.Model, info.FirmwareVersion, info.SerialNumber, info.HardwareId)
+	var devices []string
+	buf := make([]byte, 8192)
+	for {
+		n, _, err := conn.ReadFromUDP(buf)
+		if err != nil {
+			if nerr, ok := err.(net.Error); ok && nerr.Timeout() {
+				break
+			}
+			return nil, err
+		}
+		var resp DiscoveryResponse
+		if xml.Unmarshal(buf[:n], &resp) == nil {
+			for _, match := range resp.ProbeMatches.ProbeMatch {
+				for _, xaddr := range strings.Fields(match.XAddrs) {
+					u, err := url.Parse(xaddr)
+					if err == nil && u.Host != "" && !contains(devices, u.Host) {
+						devices = append(devices, u.Host)
+					}
+				}
+			}
 		}
 	}
+	return devices, nil
+}
 
-	// Get profiles
+func contains(list []string, s string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func generateUUID() string {
+	// Simple UUID generator for WS-Discovery (not RFC4122 compliant, but sufficient for this use)
+	return fmt.Sprintf("%d", time.Now().UnixNano())
+}
+
+func processDevice(addr, user, pass string) *DiscoveredDevice {
+	dev, err := goonvif.NewDevice(goonvif.DeviceParams{
+		Xaddr:    addr,
+		Username: user,
+		Password: pass,
+	})
+	if err != nil {
+		return nil
+	}
+
+	deviceInfoResp, err := dev.CallMethod(device.GetDeviceInformation{})
+	if err != nil {
+		return nil
+	}
+	defer deviceInfoResp.Body.Close()
+	var envInfo Envelope
+	if err := xml.NewDecoder(deviceInfoResp.Body).Decode(&envInfo); err != nil || envInfo.Body.GetDeviceInformationResponse == nil {
+		return nil
+	}
+	info := envInfo.Body.GetDeviceInformationResponse
+	result := &DiscoveredDevice{
+		Address:         addr,
+		Manufacturer:    info.Manufacturer,
+		Model:           info.Model,
+		FirmwareVersion: info.FirmwareVersion,
+		SerialNumber:    info.SerialNumber,
+		HardwareId:      info.HardwareId,
+	}
+
 	profilesResp, err := dev.CallMethod(media.GetProfiles{})
 	if err != nil {
-		log.Fatalf("Failed to get profiles: %v", err)
+		return result
 	}
 	defer profilesResp.Body.Close()
-
 	var envProfiles Envelope
 	if err := xml.NewDecoder(profilesResp.Body).Decode(&envProfiles); err != nil || envProfiles.Body.GetProfilesResponse == nil {
-		log.Fatalf("Failed to parse profiles response: %v", err)
+		return result
 	}
 
 	for _, profile := range envProfiles.Body.GetProfilesResponse.Profiles {
-		fmt.Printf("Profile Name: %s\n", profile.Name)
-		if profile.VideoEncoderConfiguration != nil {
-			fmt.Printf("Resolution: %dx%d\nFrame Rate: %d\n",
-				profile.VideoEncoderConfiguration.Resolution.Width,
-				profile.VideoEncoderConfiguration.Resolution.Height,
-				profile.VideoEncoderConfiguration.FrameRateLimit)
+		p := DiscoveredProfile{
+			Name:  profile.Name,
+			Token: profile.Token,
 		}
-
+		if profile.VideoEncoderConfiguration != nil {
+			p.Resolution = fmt.Sprintf("%dx%d", profile.VideoEncoderConfiguration.Resolution.Width, profile.VideoEncoderConfiguration.Resolution.Height)
+			p.FrameRate = profile.VideoEncoderConfiguration.FrameRateLimit
+		}
 		getStreamUri := media.GetStreamUri{
 			ProfileToken: onvif.ReferenceToken(profile.Token),
 			StreamSetup: onvif.StreamSetup{
@@ -123,18 +224,41 @@ func main() {
 			},
 		}
 		streamUriResp, err := dev.CallMethod(getStreamUri)
-		if err != nil {
-			log.Printf("Failed to get stream URI for profile %s: %v", profile.Name, err)
-			continue
-		}
-
-		var envStream Envelope
-		if err := xml.NewDecoder(streamUriResp.Body).Decode(&envStream); err != nil || envStream.Body.GetStreamUriResponse == nil {
-			log.Printf("Failed to parse stream URI response for profile %s: %v", profile.Name, err)
+		if err == nil {
+			var envStream Envelope
+			if xml.NewDecoder(streamUriResp.Body).Decode(&envStream) == nil && envStream.Body.GetStreamUriResponse != nil {
+				p.StreamURI = envStream.Body.GetStreamUriResponse.MediaUri.Uri
+			}
 			streamUriResp.Body.Close()
-			continue
 		}
-		fmt.Printf("Stream URI: %s\n\n", envStream.Body.GetStreamUriResponse.MediaUri.Uri)
-		streamUriResp.Body.Close()
+		result.Profiles = append(result.Profiles, p)
 	}
+	return result
+}
+
+func main() {
+	addr := flag.String("a", "", "Camera address (e.g. 192.168.1.100:8080)")
+	user := flag.String("u", "admin", "Camera username")
+	pass := flag.String("p", "admin", "Camera password")
+	flag.Parse()
+
+	var devices []*DiscoveredDevice
+	if *addr != "" {
+		if dev := processDevice(*addr, *user, *pass); dev != nil {
+			devices = append(devices, dev)
+		}
+	} else {
+		found, err := discoverONVIFDevices(2 * time.Second)
+		if err != nil {
+			log.Fatalf("Discovery failed: %v", err)
+		}
+		for _, xaddr := range found {
+			if dev := processDevice(xaddr, *user, *pass); dev != nil {
+				devices = append(devices, dev)
+			}
+		}
+	}
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetIndent("", "  ")
+	enc.Encode(devices)
 }

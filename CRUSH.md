@@ -1,59 +1,49 @@
 # onvif-streams Development Guide
 
-## Build/Test/Lint Commands
+## Build / Test / Lint
 
 - **Build**: `go build .` or `go run .`
-- **Test**: `task test` or `go test ./...` (run single test: `go test ./internal/llm/prompt -run TestGetContextFromPaths`)
-- **Update Golden Files**: `go test ./... -update` (regenerates .golden files when test output changes)
-  - Update specific package: `go test ./internal/tui/components/core -update` (in this case, we're updating "core")
-- **Lint**: `task lint-fix`
-- **Format**: `task fmt` (gofmt -w .)
-- **Dev**: `task dev` (runs with profiling enabled)
+- **Test**: `go test ./...` – run a specific test with `-run`.
+- **Golden**: `go test ./... -update` to regenerate golden files.
+- **Lint**: Run your linter directly (e.g., `golangci-lint run`).
+- **Dev**: `go run . ./dev` (profiling enabled).
 
-## Code Style Guidelines
+## Code Style
 
-- **Imports**: Use goimports formatting, group stdlib, external, internal packages
-- **Formatting**: Use gofmt
-- **Naming**: Standard Go conventions - PascalCase for exported, camelCase for unexported
-- **Types**: Prefer explicit types, use type aliases for clarity (e.g., `type AgentName string`)
-- **Error handling**: Return errors explicitly, use `fmt.Errorf` for wrapping
-- **Context**: Always pass context.Context as first parameter for operations
-- **Interfaces**: Define interfaces in consuming packages, keep them small and focused
-- **Structs**: Use struct embedding for composition, group related fields
-- **Constants**: Use typed constants with iota for enums, group in const blocks
-- **Testing**: Use testify's `require` package, parallel tests with `t.Parallel()`,
-  `t.SetEnv()` to set environment variables. Always use `t.Tempdir()` when in
-  need of a temporary directory. This directory does not need to be removed.
-- **JSON tags**: Use snake_case for JSON field names
-- **File permissions**: Use octal notation (0o755, 0o644) for file permissions
-- **Comments**: End comments in periods unless comments are at the end of the line.
+- Imports: use `goimports` to sort stdlib, external, internal.
+- Formatting: `gofmt`.
+- Naming: exported – PascalCase, unexported – camelCase.
+- Types: explicit, use type aliases.
+- Errors: return explicitly, wrap with `fmt.Errorf`.
+- Context: first argument for operations.
+- Interfaces: minimal, defined in consuming packages.
+- Consts: typed, iota.
+- JSON tags: snake_case.
+- File perms: octal (0o755, 0o644).
+- Comments: end with period.
 
-## Testing with Mock Providers
+## Testing
 
-When writing tests that involve provider configurations, use the mock providers to avoid API calls:
+- Use `require` from testify.
+- Parallel tests: `t.Parallel()`.
+- Env vars: `t.SetEnv`.
+- Temp dirs: `t.TempDir()`.
+
+## Mock Providers
 
 ```go
 func TestYourFunction(t *testing.T) {
     // Enable mock providers for testing
-    originalUseMock := config.UseMockProviders
+    orig := config.UseMockProviders
     config.UseMockProviders = true
     defer func() {
-        config.UseMockProviders = originalUseMock
+        config.UseMockProviders = orig
         config.ResetProviders()
     }()
-
-    // Reset providers to ensure fresh mock data
     config.ResetProviders()
-
-    // Your test code here - providers will now return mock data
     providers := config.Providers()
-    // ... test logic
+    // test logic
 }
 ```
 
-## Formatting
-
-- ALWAYS format any Go code you write.
-  - First, try `goimports`.
-  - If `goimports` is not available, use `gofmt`.
-
+No cursor or Copilot rules.

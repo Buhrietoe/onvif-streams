@@ -12,15 +12,71 @@ The output is a JSON array of all discovered devices and their stream URIs.
 Usage of onvif-streams:
   -a string
     	Camera address (e.g. 192.168.1.100:8080)
+  -f string
+    	Output format: json or table (default "json")
+  -n	Show only device names (implies -f table)
+  -o string
+    	Output file (default: stdout)
   -p string
     	Camera password (default "admin")
+  -r int
+    	Number of retries for SOAP calls
+  -t duration
+    	UDP discovery timeout (e.g. 2s, 5s) (default 2s)
   -u string
     	Camera username (default "admin")
 ```
 
+## Environment Variables
+
+- `ONVIF_USER` — default username (overrides "admin")
+- `ONVIF_PASS` — default password (overrides "admin")
+
+Command-line flags `-u` and `-p` take precedence over environment variables.
+
+## Examples
+
+Auto-discover and output JSON:
+
+```bash
+onvif-streams
+```
+
+Target a specific camera:
+
+```bash
+onvif-streams -a 192.168.1.100:8080
+```
+
+List device names only:
+
+```bash
+onvif-streams -n
+```
+
+Output as table with retry on network errors:
+
+```bash
+onvif-streams -f table -r 2
+```
+
+Write JSON to file:
+
+```bash
+onvif-streams -o devices.json
+```
+
+Use custom credentials via environment:
+
+```bash
+ONVIF_USER=myuser ONVIF_PASS=mypass onvif-streams
+```
+
 ## Install
 
-    go install -v github.com/Buhrietoe/onvif-streams@latest
+```bash
+go install -v github.com/Buhrietoe/onvif-streams@latest
+```
 
 ## Example Output
 
@@ -69,5 +125,3 @@ Usage of onvif-streams:
   }
 ]
 ```
-
-

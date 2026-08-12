@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope">
+ <e:Body>
+  <GetDeviceInformationResponse xmlns="http://www.onvif.org/ver10/device/wsdl">
+   <Manufacturer>Hikvision</Manufacturer>
+   <Model>DS-2CD2043G0-I</Model>
+   <FirmwareVersion>V5.6.5 build 200615</FirmwareVersion>
+   <SerialNumber>R2C0403112345</SerialNumber>
+   <HardwareId>H1123456789</HardwareId>
+  </GetDeviceInformationResponse>
+ </e:Body>
+</e:Envelope>

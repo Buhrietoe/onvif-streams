@@ -2,18 +2,20 @@ package main
 
 import (
 	"encoding/xml"
-	"fmt"
 	"net"
 	"net/url"
 	"strings"
 	"time"
+
+	"github.com/gofrs/uuid"
 )
 
 func discoverONVIFDevices(timeout time.Duration) ([]string, error) {
 	probe := `<?xml version="1.0" encoding="UTF-8"?>
 <e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope"
  xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing"
- xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+ xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"
+ xmlns:dn="http://www.onvif.org/ver10/network/wsdl">
  <e:Header>
   <w:MessageID>uuid:` + generateUUID() + `</w:MessageID>
   <w:To>urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To>
@@ -21,7 +23,7 @@ func discoverONVIFDevices(timeout time.Duration) ([]string, error) {
  </e:Header>
  <e:Body>
   <d:Probe>
-   <d:Types>dn:NetworkVideoTransmitter</d:Types>
+   <d:Types>dn:NetworkVideoTransmitter dn:NetworkVideoRecorder dn:MediaServer</d:Types>
   </d:Probe>
  </e:Body>
 </e:Envelope>`
@@ -77,6 +79,9 @@ func contains(list []string, s string) bool {
 }
 
 func generateUUID() string {
-	// Simple UUID generator for WS-Discovery (not RFC4122 compliant, but sufficient for this use)
-	return fmt.Sprintf("%d", time.Now().UnixNano())
+	u, err := uuid.NewV4()
+	if err != nil {
+		return "00000000-0000-0000-0000-000000000000"
+	}
+	return u.String()
 }

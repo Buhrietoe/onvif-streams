@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/xml"
 	"fmt"
+	"net/http"
 
 	goonvif "github.com/use-go/onvif"
 	"github.com/use-go/onvif/media"
@@ -10,7 +11,7 @@ import (
 	"github.com/use-go/onvif/device"
 )
 
-func processDevice(addr, user, pass string) *DiscoveredDevice {
+func processDevice(addr, user, pass string, retries int) *DiscoveredDevice {
 	dev, err := goonvif.NewDevice(goonvif.DeviceParams{
 		Xaddr:    addr,
 		Username: user,
@@ -20,7 +21,13 @@ func processDevice(addr, user, pass string) *DiscoveredDevice {
 		return nil
 	}
 
-	deviceInfoResp, err := dev.CallMethod(device.GetDeviceInformation{})
+	var deviceInfoResp *http.Response
+	for attempt := 0; attempt <= retries; attempt++ {
+		deviceInfoResp, err = dev.CallMethod(device.GetDeviceInformation{})
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return nil
 	}
@@ -39,7 +46,13 @@ func processDevice(addr, user, pass string) *DiscoveredDevice {
 		HardwareId:      info.HardwareId,
 	}
 
-	profilesResp, err := dev.CallMethod(media.GetProfiles{})
+	var profilesResp *http.Response
+	for attempt := 0; attempt <= retries; attempt++ {
+		profilesResp, err = dev.CallMethod(media.GetProfiles{})
+		if err == nil {
+			break
+		}
+	}
 	if err != nil {
 		return result
 	}
@@ -54,7 +67,7 @@ func processDevice(addr, user, pass string) *DiscoveredDevice {
 			Name:  profile.Name,
 			Token: profile.Token,
 		}
-		if profile.VideoEncoderConfiguration != nil {
+		if profile.VideoEncoderConfiguration != nil && profile.VideoEncoderConfiguration.Resolution.Width > 0 && profile.VideoEncoderConfiguration.Resolution.Height > 0 {
 			p.Resolution = fmt.Sprintf("%dx%d", profile.VideoEncoderConfiguration.Resolution.Width, profile.VideoEncoderConfiguration.Resolution.Height)
 			p.FrameRate = profile.VideoEncoderConfiguration.FrameRateLimit
 		}
@@ -65,7 +78,13 @@ func processDevice(addr, user, pass string) *DiscoveredDevice {
 				Transport: onvif.Transport{Protocol: "RTSP"},
 			},
 		}
-		streamUriResp, err := dev.CallMethod(getStreamUri)
+		var streamUriResp *http.Response
+		for attempt := 0; attempt <= retries; attempt++ {
+			streamUriResp, err = dev.CallMethod(getStreamUri)
+			if err == nil {
+				break
+			}
+		}
 		if err == nil {
 			var envStream Envelope
 			if xml.NewDecoder(streamUriResp.Body).Decode(&envStream) == nil && envStream.Body.GetStreamUriResponse != nil {

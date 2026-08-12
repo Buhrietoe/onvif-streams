@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope">
+ <e:Body>
+  <d:ProbeMatches xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery">
+   <d:ProbeMatch>
+    <wsa:Address xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">uuid:camera-123</wsa:Address>
+    <d:Types>dn:NetworkVideoTransmitter</d:Types>
+    <d:XAddrs>http://192.168.1.100:8080/onvif/device_service</d:XAddrs>
+   </d:ProbeMatch>
+   <d:ProbeMatch>
+    <wsa:Address xmlns:wsa="http://schemas.xmlsoap.org/ws/2004/08/addressing">uuid:nvr-456</wsa:Address>
+    <d:Types>dn:NetworkVideoRecorder</d:Types>
+    <d:XAddrs>http://192.168.1.200:80/onvif/device_service</d:XAddrs>
+   </d:ProbeMatch>
+  </d:ProbeMatches>
+ </e:Body>
+</e:Envelope>

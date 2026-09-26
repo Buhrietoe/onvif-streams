@@ -43,14 +43,14 @@ go test ./...          # Unit + integration tests (no network needed)
 - **JSON tags**: All output structs use `snake_case` tags (`firmware_version`, `stream_uri`, etc.).
 
 ## Tests
-- `onvif_streams_test.go` — unit tests: XML unmarshaling, JSON tags, `printTable`, `envDefault`.
-- `integration_test.go` — integration tests using fixtures in `testdata/` (no network).
+- `onvif_streams_test.go` — unit tests with inline XML strings for SOAP response parsing, JSON tag validation, `printTable`, and `envDefault`.
+- `integration_test.go` — integration tests using fixture files in `testdata/` (no network).
 - Run: `go test ./...`
 
 ## Dependencies
 - `github.com/use-go/onvif` v0.0.9 — ONVIF protocol implementation
 - `github.com/gofrs/uuid` v4.4.0 — UUID generation
-- Go 1.25.0 required (go.mod)
+- Go 1.26.0 required (go.mod)
 
 ## Environment
 Requires local network access for discovery or targeting:

@@ -9,10 +9,10 @@ require (
 
 require (
 	github.com/beevik/etree v1.8.1 // indirect
-	github.com/elgs/gostrgen v0.0.0-20251010065124-dce324c66371 // indirect
+	github.com/elgs/gostrgen v0.0.0-20161222160715-9d61ae07eeae // indirect
 	github.com/juju/errors v1.0.0 // indirect
 	github.com/kr/pretty v0.3.1 // indirect
 	github.com/rogpeppe/go-internal v1.14.1 // indirect
-	golang.org/x/net v0.59.0 // indirect
-	golang.org/x/sys v0.48.0 // indirect
+	golang.org/x/net v0.61.0 // indirect
+	golang.org/x/sys v0.49.0 // indirect
 )
